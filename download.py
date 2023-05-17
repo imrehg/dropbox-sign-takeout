@@ -42,7 +42,7 @@ def list_all_signature_requests(
     account_id: str = "all",
     page_size: int = 100,
     max_pages: Optional[int] = None,
-    include_incomplete: bool = False,
+    include_incomplete: bool = True,
 ) -> list[SignatureRequest]:
     """List out signature requests to provide main info for downloading."""
     signature_request_api = apis.SignatureRequestApi(api_client)
@@ -77,7 +77,8 @@ def list_all_signature_requests(
                     id=request["signature_request_id"], title=request["title"]
                 )
                 for request in response["signature_requests"]
-                if include_incomplete or request["is_complete"]
+                if (request["signature_request_id"] is not None)
+                and (include_incomplete or request["is_complete"])
             ]
         except ApiException as e:
             print("Exception when calling Dropbox Sign API: %s\n" % e)
@@ -154,7 +155,7 @@ def download_signature_requests(
 
 
 with ApiClient(configuration) as api_client:
-    signature_requests = list_all_signature_requests(
-        api_client=api_client, include_incomplete=True
+    signature_requests = list_all_signature_requests(api_client=api_client)
+    download_signature_requests(
+        api_client, signature_requests, overwrite_existing=False
     )
-    download_signature_requests(api_client, signature_requests, overwrite_existing=True)
