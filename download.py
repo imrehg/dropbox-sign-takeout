@@ -109,6 +109,13 @@ def download_signature_requests(
             response = signature_request_api.signature_request_files_as_file_url(
                 signature_requests.id
             )
+            if "file_url" not in response:
+                logger.warning(
+                    "Document id %s doesn't have a relevant document file."
+                    % signature_requests.id
+                )
+                continue
+
             file_url = response["file_url"]
             file_name = f"{signature_requests.title}_{signature_requests.id}.pdf"
             file_name = re.sub(
@@ -146,5 +153,7 @@ def download_signature_requests(
 
 
 with ApiClient(configuration) as api_client:
-    signature_requests = list_all_signature_requests(api_client=api_client)
+    signature_requests = list_all_signature_requests(
+        api_client=api_client, include_incomplete=True
+    )
     download_signature_requests(api_client, signature_requests, overwrite_existing=True)
