@@ -1,0 +1,4 @@
+python-dotenv
+dropbox-sign
+tqdm
+requests
