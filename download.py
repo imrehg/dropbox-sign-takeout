@@ -8,6 +8,8 @@ from typing import Optional
 import requests
 from dotenv import load_dotenv
 from dropbox_sign import ApiClient, ApiException, Configuration, apis
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 from tqdm import tqdm
 
 load_dotenv()
@@ -69,23 +71,36 @@ def download_signature_requests(
     api_client,
     signature_requests: list[SignatureRequest] = [],
     download_folder: Path = Path(__file__).parent / "downloads",
+    overwrite_existing: bool = True,
 ):
     """Download signature request files."""
     signature_request_api = apis.SignatureRequestApi(api_client)
     download_folder.mkdir(parents=True, exist_ok=True)
+
+    s = requests.Session()
+
+    retries = Retry(
+        total=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504]
+    )
+
+    s.mount("http://", HTTPAdapter(max_retries=retries))
+
     for signature_requests in tqdm(signature_requests, desc="Downloading documents"):
         try:
             response = signature_request_api.signature_request_files_as_file_url(
                 signature_requests.id
             )
             file_url = response["file_url"]
-            file_name = signature_requests.title + ".pdf"
+            file_name = f"{signature_requests.title}_{signature_requests.id}_.pdf"
             file_name = re.sub(
                 "[^0-9a-zA-Z]+", "_", file_name
             )  # clear characters that could cause issues as a filename
             file_path = download_folder / file_name
+            if Path.exists(file_path) and not overwrite_existing:
+                # print("skipping")
+                continue
 
-            r = requests.get(file_url, stream=True, timeout=30)
+            r = s.get(file_url, stream=True, timeout=30)
             if r.ok:
                 with open(file_path, "wb") as f:
                     for chunk in r.iter_content(chunk_size=1024 * 8):
@@ -104,4 +119,4 @@ def download_signature_requests(
 
 with ApiClient(configuration) as api_client:
     signature_requests = list_all_signature_requests(api_client=api_client)
-    download_signature_requests(api_client, signature_requests)
+    download_signature_requests(api_client, signature_requests, overwrite_existing=True)
