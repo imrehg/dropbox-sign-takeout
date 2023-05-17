@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -6,6 +7,7 @@ from pprint import pprint
 from typing import Optional
 
 import requests
+import validators
 from dotenv import load_dotenv
 from dropbox_sign import ApiClient, ApiException, Configuration, apis
 from requests.adapters import HTTPAdapter
@@ -19,6 +21,15 @@ configuration = Configuration(
     username=os.getenv("DROPBOX_API_KEY"),
 )
 
+logging.basicConfig(
+    filename="download.log",
+    filemode="a",
+    format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
+    datefmt="%H:%M:%S",
+    level=logging.DEBUG,
+)
+logger = logging.getLogger("downloader")
+
 
 @dataclass
 class SignatureRequest:
@@ -31,6 +42,7 @@ def list_all_signature_requests(
     account_id: str = "all",
     page_size: int = 100,
     max_pages: Optional[int] = None,
+    include_incomplete: bool = False,
 ) -> list[SignatureRequest]:
     """List out signature requests to provide main info for downloading."""
     signature_request_api = apis.SignatureRequestApi(api_client)
@@ -52,13 +64,20 @@ def list_all_signature_requests(
             if num_pages is None:
                 num_pages = response["list_info"]["num_pages"]
                 pbar.total = num_pages
+
+            # # Debug bits
             # for request in response['signature_requests']:
-            #     print(f"{request['title']}: {request['signature_request_id']}")
+            # if request['signature_request_id'] in ("4e61e789f13ba2b507a10d8a3597218b280b43d6", "335214a788cca8a376116b767d3aecded70c4033"):
+            #     pprint(request)
+            # if not request['is_complete']:
+            #     pprint(request)
+
             signature_requests += [
                 SignatureRequest(
                     id=request["signature_request_id"], title=request["title"]
                 )
                 for request in response["signature_requests"]
+                if include_incomplete or request[is_complete]
             ]
         except ApiException as e:
             print("Exception when calling Dropbox Sign API: %s\n" % e)
@@ -80,7 +99,7 @@ def download_signature_requests(
     s = requests.Session()
 
     retries = Retry(
-        total=5, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504]
+        total=10, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504]
     )
 
     s.mount("http://", HTTPAdapter(max_retries=retries))
@@ -91,13 +110,19 @@ def download_signature_requests(
                 signature_requests.id
             )
             file_url = response["file_url"]
-            file_name = f"{signature_requests.title}_{signature_requests.id}_.pdf"
+            file_name = f"{signature_requests.title}_{signature_requests.id}.pdf"
             file_name = re.sub(
-                "[^0-9a-zA-Z]+", "_", file_name
+                "[^0-9a-zA-Z\.]+", "_", file_name
             )  # clear characters that could cause issues as a filename
             file_path = download_folder / file_name
             if Path.exists(file_path) and not overwrite_existing:
                 # print("skipping")
+                continue
+
+            if not validators.url(file_url):
+                logger.error(
+                    f"Not valud file url for signature '{signature_requests.title}' and ID {signature_requests.id}: {file_url}"
+                )
                 continue
 
             r = s.get(file_url, stream=True, timeout=30)
@@ -109,12 +134,15 @@ def download_signature_requests(
                             f.flush()
                             os.fsync(f.fileno())
             else:  # HTTP status code 4XX/5XX
-                print(
+                logger.error(
                     "Download failed: status code {}\n{}".format(r.status_code, r.text)
                 )
 
         except ApiException as e:
-            print("Exception when calling Dropbox Sign API: %s\n" % e)
+            logger.error(
+                "Exception when calling Dropbox Sign API for id %s: %s\n"
+                % (signature_requests.id, e)
+            )
 
 
 with ApiClient(configuration) as api_client:
