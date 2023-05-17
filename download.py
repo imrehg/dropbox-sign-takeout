@@ -38,13 +38,20 @@ class SignatureRequest:
 
 
 def list_all_signature_requests(
-    api_client,
+    api_client: ApiClient,
     account_id: str = "all",
     page_size: int = 100,
     max_pages: Optional[int] = None,
     include_incomplete: bool = True,
 ) -> list[SignatureRequest]:
-    """List out signature requests to provide main info for downloading."""
+    """List out signature requests to provide main info for downloading.
+
+    api_client: a Dropbox API client
+    account_id: the account from which to download all the contracts from, if "all" then all contracts that the API user has access to
+    page_size: how many items' info to download in one go, 100 is the max
+    max_pages: how many pages worth of items to download, if None hten all
+    include_incomplete: whether to download contracts that are marked "is_complete" : false
+    """
     signature_request_api = apis.SignatureRequestApi(api_client)
 
     page = 1
@@ -88,12 +95,18 @@ def list_all_signature_requests(
 
 
 def download_signature_requests(
-    api_client,
+    api_client: ApiClient,
     signature_requests: list[SignatureRequest] = [],
     download_folder: Path = Path(__file__).parent / "downloads",
     overwrite_existing: bool = True,
 ):
-    """Download signature request files."""
+    """Download signature request files.
+
+    api_client: a Dropbox API client
+    signature_requests: a list of requests to download
+    download_folder: the path to the download folder
+    overwrite_existing: if True, then files are downloaded even if they exists on disk at the destination, useful to set to False when resuming a take-out
+    """
     signature_request_api = apis.SignatureRequestApi(api_client)
     download_folder.mkdir(parents=True, exist_ok=True)
 
@@ -107,18 +120,21 @@ def download_signature_requests(
 
     for signature_requests in tqdm(signature_requests, desc="Downloading documents"):
         try:
+            # Pre-generate the filename and check if it's already in the target location
             file_name = f"{signature_requests.title}_{signature_requests.id}.pdf"
             file_name = re.sub(
                 "[^0-9a-zA-Z\.]+", "_", file_name
             )  # clear characters that could cause issues as a filename
             file_path = download_folder / file_name
             if Path.exists(file_path) and not overwrite_existing:
-                # print("skipping")
                 continue
 
+            # TODO: for draft contracts this will return a 404 which is an ApiException and thus caught, that is not great experience
             response = signature_request_api.signature_request_files_as_file_url(
                 signature_requests.id
             )
+
+            # Some sanity checking:
             if "file_url" not in response:
                 logger.warning(
                     "Document id %s doesn't have a relevant document file."
