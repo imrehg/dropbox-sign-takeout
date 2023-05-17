@@ -77,7 +77,7 @@ def list_all_signature_requests(
                     id=request["signature_request_id"], title=request["title"]
                 )
                 for request in response["signature_requests"]
-                if include_incomplete or request[is_complete]
+                if include_incomplete or request["is_complete"]
             ]
         except ApiException as e:
             print("Exception when calling Dropbox Sign API: %s\n" % e)
@@ -121,7 +121,7 @@ def download_signature_requests(
 
             if not validators.url(file_url):
                 logger.error(
-                    f"Not valud file url for signature '{signature_requests.title}' and ID {signature_requests.id}: {file_url}"
+                    f"Not valid file url for signature '{signature_requests.title}' and ID {signature_requests.id}: {file_url}"
                 )
                 continue
 
