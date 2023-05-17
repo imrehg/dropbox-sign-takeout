@@ -74,6 +74,8 @@ def list_all_signature_requests(
 
             # # Debug bits
             # for request in response['signature_requests']:
+            #     if request["signature_request_id"] is None:
+            #         pprint(request)
             # if request['signature_request_id'] in ("4e61e789f13ba2b507a10d8a3597218b280b43d6", "335214a788cca8a376116b767d3aecded70c4033"):
             #     pprint(request)
             # if not request['is_complete']:
@@ -81,10 +83,16 @@ def list_all_signature_requests(
 
             signature_requests += [
                 SignatureRequest(
-                    id=request["signature_request_id"], title=request["title"]
+                    id=request["signature_request_id"]
+                    if request["signature_request_id"] is not None
+                    else request["transmission_id"],
+                    title=request["title"],
                 )
                 for request in response["signature_requests"]
-                if (request["signature_request_id"] is not None)
+                if (
+                    request["signature_request_id"] is not None
+                    or request["transmission_id"] is not None
+                )
                 and (include_incomplete or request["is_complete"])
             ]
         except ApiException as e:
