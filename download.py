@@ -106,6 +106,15 @@ def download_signature_requests(
 
     for signature_requests in tqdm(signature_requests, desc="Downloading documents"):
         try:
+            file_name = f"{signature_requests.title}_{signature_requests.id}.pdf"
+            file_name = re.sub(
+                "[^0-9a-zA-Z\.]+", "_", file_name
+            )  # clear characters that could cause issues as a filename
+            file_path = download_folder / file_name
+            if Path.exists(file_path) and not overwrite_existing:
+                # print("skipping")
+                continue
+
             response = signature_request_api.signature_request_files_as_file_url(
                 signature_requests.id
             )
@@ -117,14 +126,6 @@ def download_signature_requests(
                 continue
 
             file_url = response["file_url"]
-            file_name = f"{signature_requests.title}_{signature_requests.id}.pdf"
-            file_name = re.sub(
-                "[^0-9a-zA-Z\.]+", "_", file_name
-            )  # clear characters that could cause issues as a filename
-            file_path = download_folder / file_name
-            if Path.exists(file_path) and not overwrite_existing:
-                # print("skipping")
-                continue
 
             if not validators.url(file_url):
                 logger.error(
