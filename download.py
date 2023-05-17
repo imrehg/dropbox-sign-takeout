@@ -102,7 +102,7 @@ def download_signature_requests(
         total=10, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504]
     )
 
-    s.mount("http://", HTTPAdapter(max_retries=retries))
+    s.mount("https://", HTTPAdapter(max_retries=retries))
 
     for signature_requests in tqdm(signature_requests, desc="Downloading documents"):
         try:
